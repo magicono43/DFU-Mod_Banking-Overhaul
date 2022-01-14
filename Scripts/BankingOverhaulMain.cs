@@ -5,7 +5,7 @@
 // Created On: 	    12/22/2021, 8:50 PM
 // Last Edit:		12/23/2020, 11:50 PM
 // Version:			1.00
-// Special Thanks:  John Doom, Kab the Bird Ranger
+// Special Thanks:  Lypyl, Hazelnut
 // Modifier:
 
 using UnityEngine;
@@ -13,6 +13,7 @@ using DaggerfallWorkshop.Game;
 using DaggerfallWorkshop.Game.Utility.ModSupport;
 using DaggerfallWorkshop.Game.UserInterfaceWindows;
 using DaggerfallWorkshop.Game.Utility.ModSupport.ModSettings;
+using System;
 
 namespace BankingOverhaul
 {
@@ -44,7 +45,7 @@ namespace BankingOverhaul
         public static void Init(InitParams initParams)
         {
             mod = initParams.Mod;
-            instance = new GameObject("TrainingServiceOverhaul").AddComponent<BankingOverhaulMain>(); // Add script to the scene.
+            instance = new GameObject("BankingOverhaul").AddComponent<BankingOverhaulMain>(); // Add script to the scene.
 
             mod.LoadSettingsCallback = LoadSettings; // To enable use of the "live settings changes" feature in-game.
 
@@ -57,7 +58,10 @@ namespace BankingOverhaul
 
             mod.LoadSettings();
 
-            UIWindowFactory.RegisterCustomUIWindow(UIWindowType.GuildServiceTraining, typeof(BankingOverhaulWindow));
+            DaggerfallWorkshop.Game.Formulas.FormulaHelper.RegisterOverride(mod, "CalculateMaxBankLoan", (Func<int>)CalculateMaxBankLoan);
+            DaggerfallWorkshop.Game.Formulas.FormulaHelper.RegisterOverride(mod, "CalculateBankLoanRepayment", (Func<int, int, int>)CalculateBankLoanRepayment);
+
+            UIWindowFactory.RegisterCustomUIWindow(UIWindowType.Banking, typeof(BankingOverhaulWindow));
 
             Debug.Log("Finished mod init: Banking Overhaul");
         }
@@ -140,6 +144,60 @@ namespace BankingOverhaul
         public static int GetMaxPossibleTrain()
         {
             return MaximumPossibleTraining;
+        }
+
+        public static int CalculateMaxBankLoan()
+        {
+            int regionIndex = GameManager.Instance.PlayerGPS.CurrentRegionIndex;
+            DaggerfallConnect.Arena2.FactionFile.FactionData factionData;
+            GameManager.Instance.PlayerEntity.FactionData.GetRegionFaction(regionIndex, out factionData);
+            int regionRep = factionData.rep;
+            int legalRep = GameManager.Instance.PlayerEntity.RegionData[regionIndex].LegalRep;
+            int personality = GameManager.Instance.PlayerEntity.Stats.LivePersonality - 50;
+            int baseLoan = 40000 + (personality * 500);
+            int regionLoan = 0;
+            int legalLoan = 0;
+
+            if (regionRep > 0)
+                regionLoan = regionRep * (3000 + (personality * 30));
+            else if (regionRep < 0)
+                regionLoan = regionRep * (1000 + (personality * -10));
+
+            if (legalRep > 0)
+                legalLoan = legalRep * (1000 + (personality * 5));
+            else if (legalRep < 0)
+                legalLoan = legalRep * (2000 + (personality * -30));
+
+            return baseLoan + regionLoan + legalLoan;
+        }
+
+        public static int CalculateBankLoanRepayment(int amount, int regionIndex) // 5, 11, 18, 26
+        {
+            DaggerfallConnect.Arena2.FactionFile.FactionData factionData;
+            GameManager.Instance.PlayerEntity.FactionData.GetRegionFaction(regionIndex, out factionData);
+            int regionRep = factionData.rep;
+            int legalRep = GameManager.Instance.PlayerEntity.RegionData[regionIndex].LegalRep;
+            int personality = GameManager.Instance.PlayerEntity.Stats.LivePersonality - 50;
+            float regionMod = 0f;
+            float legalMod = 0f;
+            float combinedMod = 1f;
+
+            if (regionRep > 0)
+                regionMod = regionRep * (-0.01f * ((personality * 0.005f) + 1));
+            else if (regionRep < 0)
+                regionMod = regionRep * (-0.005f * ((personality * -0.005f) + 1));
+
+            if (legalRep > 0)
+                legalMod = legalRep * (-0.0025f * ((personality * 0.005f) + 1));
+            else if (legalRep < 0)
+                legalMod = legalRep * (-0.01f * ((personality * -0.005f) + 1));
+
+            if (regionMod + legalMod < 0)
+                combinedMod = (regionMod + legalMod + 1) * -1;
+            else if (regionMod + legalMod > 0)
+                combinedMod = (regionMod + legalMod + 1);
+
+            return (int)(amount + amount * (0.1f * combinedMod));
         }
     }
 }

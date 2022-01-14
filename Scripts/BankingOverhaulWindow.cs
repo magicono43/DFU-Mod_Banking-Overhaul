@@ -5,7 +5,7 @@
 // Created On: 	    12/22/2021, 8:50 PM
 // Last Edit:		12/23/2020, 11:50 PM
 // Version:			1.00
-// Special Thanks:  John Doom, Kab the Bird Ranger
+// Special Thanks:  Lypyl, Hazelnut
 // Modifier:
 
 using System.Collections.Generic;
@@ -18,358 +18,574 @@ using DaggerfallWorkshop.Game.UserInterface;
 using UnityEngine;
 using DaggerfallWorkshop.Game.Formulas;
 using BankingOverhaul;
+using DaggerfallWorkshop.Game.Banking;
+using DaggerfallWorkshop.Utility.AssetInjection;
+using DaggerfallWorkshop.Game.Items;
 
 namespace DaggerfallWorkshop.Game.UserInterfaceWindows
 {
-    public class BankingOverhaulWindow : DaggerfallGuildServiceTraining
+    public class BankingOverhaulWindow : DaggerfallBankingWindow
     {
-        DFCareer.Skills skillToTrain;
-
         public static int PickedSkillIndex { get; set; }
         public static string PickedSkillName { get; set; }
 
-        public BankingOverhaulWindow(IUserInterfaceManager uiManager, GuildNpcServices npcService, IGuild guild) : base(uiManager, npcService, guild)
+        const string baseTextureName = "LGS_Invest_Popup_Services_Replacer"; // Will use whatever the name of the new bank background texture will be.
+
+        Panel mainPanel;
+
+        TextLabel accountAmount;
+        TextLabel inventoryAmount;
+        TextLabel loanAmountDue;
+        TextLabel loanDueBy;
+
+        Button depoGoldButton;
+        Button drawGoldButton;
+        Button depoLOCButton;
+        Button drawLOCButton;
+        Button loanRepayButton;
+        Button loanBorrowButton;
+        Button buyHouseButton;
+        Button sellHouseButton;
+        Button buyShipButton;
+        Button sellShipButton;
+        Button exitButton;
+
+        TextBox transactionInput;
+
+        PlayerEntity playerEntity;
+        TransactionType transactionType = TransactionType.None;
+
+        public int regionIndex = 0;
+        int amount = 0;
+
+        public BankingOverhaulWindow(IUserInterfaceManager uiManager, DaggerfallBaseWindow previous = null) : base(uiManager, previous)
         {
         }
 
-        protected override void TrainingService()
+        protected override void Setup()
         {
-            CloseWindow();
-            // Check enough time has passed since last trained
-            DaggerfallDateTime now = DaggerfallUnity.Instance.WorldTime.Now;
-            if ((now.ToClassicDaggerfallTime() - playerEntity.TimeOfLastSkillTraining) < TrainingServiceOverhaulMain.GetReqRecovHours() * 60) // 540 default
+            base.Setup();
+
+            Texture2D background;
+
+            TextureReplacement.TryImportTexture(baseTextureName, true, out background);
+
+            if (background == null)
             {
-                TextFile.Token[] tokens = DaggerfallUnity.Instance.TextProvider.GetRandomTokens(TrainingToSoonId);
-                DaggerfallMessageBox messageBox = new DaggerfallMessageBox(uiManager, uiManager.TopWindow);
-                messageBox.SetTextTokens(tokens);
-                messageBox.ClickAnywhereToClose = true;
-                messageBox.Show();
+                Debug.LogError(string.Format("Failed to load background image {0} for Banking pop-up", baseTextureName));
+                CloseWindow();
+                return;
             }
+            Debug.Log("Texture is:" + background.ToString());
+
+
+
+            ParentPanel.BackgroundColor = ScreenDimColor;
+
+            mainPanel = DaggerfallUI.AddPanel(NativePanel, AutoSizeModes.None);
+            mainPanel.BackgroundTexture = background;
+            mainPanel.Size = new Vector2(225, 181);
+            mainPanel.HorizontalAlignment = HorizontalAlignment.Center;
+            mainPanel.VerticalAlignment = VerticalAlignment.Middle;
+
+            accountAmount = new TextLabel();
+            accountAmount.Position = new Vector2(150, 14);
+            accountAmount.Size = new Vector2(60, 13);
+            accountAmount.Name = "accnt_total_label";
+            accountAmount.MaxCharacters = 13;
+            mainPanel.Components.Add(accountAmount);
+
+            inventoryAmount = new TextLabel();
+            inventoryAmount.Position = new Vector2(156, 24);
+            inventoryAmount.Size = new Vector2(64, 13);
+            inventoryAmount.Name = "inv_total_label";
+            inventoryAmount.MaxCharacters = 11;
+            mainPanel.Components.Add(inventoryAmount);
+
+            loanAmountDue = new TextLabel();
+            loanAmountDue.Position = new Vector2(96, 34);
+            loanAmountDue.Size = new Vector2(60, 13);
+            loanAmountDue.Name = "amount_due_label";
+            loanAmountDue.MaxCharacters = 24;
+            mainPanel.Components.Add(loanAmountDue);
+
+            loanDueBy = new TextLabel();
+            loanDueBy.Position = new Vector2(71, 44);
+            loanDueBy.Size = new Vector2(60, 13);
+            loanDueBy.Name = "loan_by_label";
+            loanDueBy.MaxCharacters = 33;
+            mainPanel.Components.Add(loanDueBy);
+
+            depoGoldButton = new Button();
+            depoGoldButton.Position = new Vector2(120, 58);
+            depoGoldButton.Size = new Vector2(45, 8);
+            depoGoldButton.Name = "depo_gold_button";
+            depoGoldButton.OnMouseClick += DepoGoldButton_OnMouseClick;
+            mainPanel.Components.Add(depoGoldButton);
+
+            drawGoldButton = new Button();
+            drawGoldButton.Position = new Vector2(172, 58);
+            drawGoldButton.Size = new Vector2(45, 8);
+            drawGoldButton.Name = "draw_gold_button";
+            drawGoldButton.OnMouseClick += DrawGoldButton_OnMouseClick;
+            mainPanel.Components.Add(drawGoldButton);
+
+            depoLOCButton = new Button();
+            depoLOCButton.Position = new Vector2(120, 76);
+            depoLOCButton.Size = new Vector2(45, 8);
+            depoLOCButton.Name = "depo_loc_button";
+            depoLOCButton.OnMouseClick += DepoLOCButton_OnMouseClick;
+            mainPanel.Components.Add(depoLOCButton);
+
+            drawLOCButton = new Button();
+            drawLOCButton.Position = new Vector2(172, 76);
+            drawLOCButton.Size = new Vector2(45, 8);
+            drawLOCButton.Name = "draw_LOC_button";
+            drawLOCButton.OnMouseClick += DrawLOCButton_OnMouseClick;
+            mainPanel.Components.Add(drawLOCButton);
+
+            loanRepayButton = new Button();
+            loanRepayButton.Position = new Vector2(120, 94);
+            loanRepayButton.Size = new Vector2(45, 8);
+            loanRepayButton.Name = "loan_repay_button";
+            loanRepayButton.OnMouseClick += LoanRepayButton_OnMouseClick;
+            mainPanel.Components.Add(loanRepayButton);
+
+            loanBorrowButton = new Button();
+            loanBorrowButton.Position = new Vector2(172, 94);
+            loanBorrowButton.Size = new Vector2(45, 8);
+            loanBorrowButton.Name = "loan_borrow_button";
+            loanBorrowButton.OnMouseClick += LoanBorrowButton_OnMouseClick;
+            mainPanel.Components.Add(loanBorrowButton);
+
+            buyHouseButton = new Button();
+            buyHouseButton.Position = new Vector2(120, 112);
+            buyHouseButton.Size = new Vector2(45, 8);
+            buyHouseButton.Name = "buy_house_button";
+            buyHouseButton.OnMouseClick += BuyHouseButton_OnMouseClick;
+            mainPanel.Components.Add(buyHouseButton);
+
+            sellHouseButton = new Button();
+            sellHouseButton.Position = new Vector2(172, 112);
+            sellHouseButton.Size = new Vector2(45, 8);
+            sellHouseButton.Name = "sell_house_button";
+            sellHouseButton.OnMouseClick += SellHouseButton_OnMouseClick;
+            mainPanel.Components.Add(sellHouseButton);
+
+            buyShipButton = new Button();
+            buyShipButton.Position = new Vector2(120, 130);
+            buyShipButton.Size = new Vector2(45, 8);
+            buyShipButton.Name = "buy_ship_button";
+            buyShipButton.OnMouseClick += BuyShipButton_OnMouseClick;
+            mainPanel.Components.Add(buyShipButton);
+
+            sellShipButton = new Button();
+            sellShipButton.Position = new Vector2(172, 130);
+            sellShipButton.Size = new Vector2(45, 8);
+            sellShipButton.Name = "sell_ship_button";
+            sellShipButton.OnMouseClick += SellShipButton_OnMouseClick;
+            mainPanel.Components.Add(sellShipButton);
+
+            exitButton = new Button();
+            exitButton.Position = new Vector2(92, 159);
+            exitButton.Size = new Vector2(40, 19);
+            exitButton.Name = "exit_button";
+            exitButton.OnMouseClick += ExitButton_OnMouseClick;
+            mainPanel.Components.Add(exitButton);
+
+            transactionInput = new TextBox();
+            transactionInput.Position = new Vector2(113, 146);
+            transactionInput.Size = new Vector2(103, 12);
+            transactionInput.Numeric = true;
+            transactionInput.Enabled = false;
+            transactionInput.MaxCharacters = 9;
+            mainPanel.Components.Add(transactionInput);
+
+            playerEntity = GameManager.Instance.PlayerEntity;
+            regionIndex = GameManager.Instance.PlayerGPS.CurrentRegionIndex;
+            transactionType = TransactionType.None;
+            UpdateLabels();
+        }
+
+        public override void OnPush()
+        {
+            base.OnPush();
+            DaggerfallBankManager.OnTransaction += this.OnTransactionEventHandler;
+            regionIndex = GameManager.Instance.PlayerGPS.CurrentRegionIndex;
+        }
+
+        public override void OnPop()
+        {
+            base.OnPop();
+            DaggerfallBankManager.OnTransaction -= this.OnTransactionEventHandler;
+        }
+
+        public override void Update()
+        {
+            base.Update();
+
+            if (Input.GetKeyUp(KeyCode.Return) || Input.GetKeyUp(KeyCode.KeypadEnter))
+            {
+                if (transactionType != TransactionType.None && transactionInput.Enabled)
+                {
+                    HandleTransactionInput();
+                    ToggleTransactionInput(TransactionType.None);
+                }
+            }
+
+            UpdateButtons();
+            UpdateLabels();
+        }
+
+        public void GeneratePurchaseShipPopup(ShipType shipType)
+        {
+            GeneratePopup(DaggerfallBankManager.PurchaseShip(shipType, regionIndex));
+        }
+
+        public void GeneratePurchaseHousePopup(BuildingSummary house)
+        {
+            GeneratePopup(DaggerfallBankManager.PurchaseHouse(house, regionIndex));
+        }
+
+        void UpdateLabels()
+        {
+            inventoryAmount.Text = playerEntity.GetGoldAmount().ToString();
+            if (playerEntity.WagonItems.Contains(ItemGroups.Currency, (int)Currency.Gold_pieces))
+            {
+                int wagonGold = playerEntity.WagonItems.GetItem(ItemGroups.Currency, (int)Currency.Gold_pieces).stackCount;
+                inventoryAmount.Text += " (+" + wagonGold + ")";
+            }
+            accountAmount.Text = DaggerfallBankManager.GetAccountTotal(regionIndex).ToString();
+            loanAmountDue.Text = DaggerfallBankManager.GetLoanedTotal(regionIndex).ToString();
+            loanDueBy.Text = DaggerfallBankManager.GetLoanDueDateString(regionIndex);
+        }
+
+        void UpdateButtons()
+        {
+            depoGoldButton.Enabled = transactionType == TransactionType.None;
+            drawGoldButton.Enabled = transactionType == TransactionType.None;
+            depoLOCButton.Enabled = transactionType == TransactionType.None;
+            drawLOCButton.Enabled = transactionType == TransactionType.None;
+            depoLOCButton.Enabled = transactionType == TransactionType.None;
+            loanBorrowButton.Enabled = transactionType == TransactionType.None;
+            loanRepayButton.Enabled = (transactionType == TransactionType.None && DaggerfallBankManager.HasLoan(regionIndex));
+            buyHouseButton.Enabled = transactionType == TransactionType.None;
+            sellHouseButton.Enabled = transactionType == TransactionType.None;
+            buyShipButton.Enabled = transactionType == TransactionType.None;
+            sellShipButton.Enabled = transactionType == TransactionType.None;
+        }
+
+
+        void ToggleTransactionInput(TransactionType newType)
+        {
+            if (transactionType == newType)
+                return;
+            else if (transactionType != TransactionType.None && newType != TransactionType.None)
+                return;
+
+            transactionType = newType;
+            transactionInput.Text = "";
+            transactionInput.Enabled = (transactionType != TransactionType.None);
+        }
+
+        void HandleTransactionInput()
+        {
+            int amount = 0;
+
+            if (string.IsNullOrEmpty(transactionInput.Text))
+                return;
+            else if (!System.Int32.TryParse(transactionInput.Text, out amount))
+            {
+                Debug.LogError("Failed to parse input");
+                return;
+            }
+            else if (amount < 1)
+                return;
             else
-            {
-                // Show skill picker loaded with guild training skills
-                DaggerfallListPickerWindow skillPicker = new DaggerfallListPickerWindow(uiManager, this);
-                skillPicker.OnItemPicked += HandleSkillPickEvent;
-
-                foreach (DFCareer.Skills skill in GetTrainingSkills())
-                    skillPicker.ListBox.AddItem(DaggerfallUnity.Instance.TextProvider.GetSkillName(skill));
-
-                uiManager.PushWindow(skillPicker);
-            }
+                BankingOverhaulManager.MakeTransactionBO(transactionType, amount, regionIndex);
         }
 
-        public void HandleSkillPickEvent(int index, string skillName)
+        //generates pop-ups, either to indicate failed transaction
+        //or to prompt with yes / no option
+        void GeneratePopup(TransactionResult result, int amount = 0)
         {
-            PickedSkillIndex = index;
-            PickedSkillName = skillName;
-            List<DFCareer.Skills> trainingSkills = GetTrainingSkills();
-            DFCareer.Skills skillToTrain = trainingSkills[index];
-            int guildhallQuality = 0;
-            string facTitle = "Stranger";
-            guildhallQuality = GameManager.Instance.PlayerEnterExit.BuildingDiscoveryData.quality;
-            PlayerEntity player = GameManager.Instance.PlayerEntity;
-            if (Guild.IsMember())
-                facTitle = Guild.GetTitle();
+            if (result == TransactionResult.NONE)
+                return;
 
-            CloseWindow();
+            DaggerfallMessageBox messageBox = new DaggerfallMessageBox(uiManager, this);
+            messageBox.ClickAnywhereToClose = true;
+            this.amount = amount;
 
-            // Offer training price
-            DaggerfallMessageBox messageBox = new DaggerfallMessageBox(uiManager, uiManager.TopWindow);
+            if (result == TransactionResult.TOO_HEAVY)
+                messageBox.SetText(TextManager.Instance.GetLocalizedText("cannotCarryGold"));
+            else
+                messageBox.SetTextTokens((int)result, this);
 
-            int trainingPrice = CalculateTrainingPrice(guildhallQuality, player, skillToTrain);
+            if (result == TransactionResult.DEPOSIT_LOC) //show messagebox window w/ yes no buttons
+            {
+                messageBox.AddButton(DaggerfallMessageBox.MessageBoxButtons.Yes);
+                messageBox.AddButton(DaggerfallMessageBox.MessageBoxButtons.No);
+                messageBox.ClickAnywhereToClose = false;
+                messageBox.OnButtonClick += DepositLOC_messageBox_OnButtonClick;
+            }
 
-            TextFile.Token[] tokens = DaggerfallUnity.Instance.TextProvider.CreateTokens(
-                    TextFile.Formatting.JustifyCenter,
-                    "For a session in " + skillName + ",",
-                    "it will cost you " + trainingPrice.ToString() + " gold.",
-                    "Still interested, " + facTitle + "?");
+            else if (result == TransactionResult.SELL_HOUSE_OFFER) //show messagebox window w/ yes no buttons
+            {
+                messageBox.AddButton(DaggerfallMessageBox.MessageBoxButtons.Yes);
+                messageBox.AddButton(DaggerfallMessageBox.MessageBoxButtons.No);
+                messageBox.ClickAnywhereToClose = false;
+                messageBox.OnButtonClick += SellHouse_messageBox_OnButtonClick;
+            }
+            else if (result == TransactionResult.SELL_SHIP_OFFER)
+            {
+                messageBox.AddButton(DaggerfallMessageBox.MessageBoxButtons.Yes);
+                messageBox.AddButton(DaggerfallMessageBox.MessageBoxButtons.No);
+                messageBox.ClickAnywhereToClose = false;
+                messageBox.OnButtonClick += SellShip_messageBox_OnButtonClick;
+            }
 
-            messageBox.SetTextTokens(tokens, Guild);
-            messageBox.AddButton(DaggerfallMessageBox.MessageBoxButtons.Yes);
-            messageBox.AddButton(DaggerfallMessageBox.MessageBoxButtons.No);
-            messageBox.OnButtonClick += ConfirmTraining_OnButtonClick;
             messageBox.Show();
         }
 
-        protected override void ConfirmTraining_OnButtonClick(DaggerfallMessageBox sender, DaggerfallMessageBox.MessageBoxButtons messageBoxButton)
+        #region event handlers
+
+        //handles button clicks from Deposit LOC message box
+        void DepositLOC_messageBox_OnButtonClick(DaggerfallMessageBox sender, DaggerfallMessageBox.MessageBoxButtons messageBoxButton)
         {
-            int index = PickedSkillIndex;
-            string skillName = PickedSkillName;
-            int guildhallQuality = 0;
-            guildhallQuality = GameManager.Instance.PlayerEnterExit.BuildingDiscoveryData.quality;
-            PlayerEntity player = GameManager.Instance.PlayerEntity;
-
-            CloseWindow();
-
             if (messageBoxButton == DaggerfallMessageBox.MessageBoxButtons.Yes)
-            {
-                if (playerEntity.GetGoldAmount() >= CalculateTrainingPrice(guildhallQuality, player, skillToTrain))
-                    TrainingPickedSkill(index, skillName);
-                else
-                    DaggerfallUI.MessageBox(DaggerfallTradeWindow.NotEnoughGoldId);
-            }
+                BankingOverhaulManager.MakeTransactionBO(TransactionType.Depositing_LOC, 0, regionIndex);
+
+            sender.CloseWindow();
         }
 
-        public void TrainingPickedSkill(int index, string skillName)
+        //handles button clicks from Sell house message box
+        void SellHouse_messageBox_OnButtonClick(DaggerfallMessageBox sender, DaggerfallMessageBox.MessageBoxButtons messageBoxButton)
         {
-            CloseWindow();
-            List<DFCareer.Skills> trainingSkills = GetTrainingSkills();
-            DFCareer.Skills skillToTrain = trainingSkills[index];
-            int guildhallQuality = 0;
-            string facTitle = "Stranger";
-            guildhallQuality = GameManager.Instance.PlayerEnterExit.BuildingDiscoveryData.quality;
-            PlayerEntity player = GameManager.Instance.PlayerEntity;
-            int trainingMaximum = CalculateTrainingMaximum(guildhallQuality);
-            int MaxPossTrain = TrainingServiceOverhaulMain.GetMaxPossibleTrain();
-            if (Guild.IsMember())
-                facTitle = Guild.GetTitle();
+            if (messageBoxButton == DaggerfallMessageBox.MessageBoxButtons.Yes)
+                BankingOverhaulManager.MakeTransactionBO(TransactionType.Sell_house, 0, regionIndex);
 
-            if (playerEntity.Skills.GetPermanentSkillValue(skillToTrain) > trainingMaximum)
+            sender.CloseWindow();
+        }
+
+        //handles button clicks from Sell ship message box
+        void SellShip_messageBox_OnButtonClick(DaggerfallMessageBox sender, DaggerfallMessageBox.MessageBoxButtons messageBoxButton)
+        {
+            if (messageBoxButton == DaggerfallMessageBox.MessageBoxButtons.Yes)
+                BankingOverhaulManager.MakeTransactionBO(TransactionType.Sell_ship, 0, regionIndex);
+            sender.CloseWindow();
+        }
+
+        //bank window button handlers
+        void DepoGoldButton_OnMouseClick(BaseScreenComponent sender, Vector2 position)
+        {
+            DaggerfallUI.Instance.PlayOneShot(SoundClips.ButtonClick);
+            ToggleTransactionInput(TransactionType.Depositing_gold);
+        }
+
+        void DrawGoldButton_OnMouseClick(BaseScreenComponent sender, Vector2 position)
+        {
+            DaggerfallUI.Instance.PlayOneShot(SoundClips.ButtonClick);
+            ToggleTransactionInput(TransactionType.Withdrawing_gold);
+        }
+
+        void DepoLOCButton_OnMouseClick(BaseScreenComponent sender, Vector2 position)
+        {
+            DaggerfallUI.Instance.PlayOneShot(SoundClips.ButtonClick);
+            GeneratePopup(TransactionResult.DEPOSIT_LOC);
+        }
+
+        void DrawLOCButton_OnMouseClick(BaseScreenComponent sender, Vector2 position)
+        {
+            DaggerfallUI.Instance.PlayOneShot(SoundClips.ButtonClick);
+            ToggleTransactionInput(TransactionType.Withdrawing_Letter);
+        }
+
+        void LoanRepayButton_OnMouseClick(BaseScreenComponent sender, Vector2 position)
+        {
+            DaggerfallUI.Instance.PlayOneShot(SoundClips.ButtonClick);
+            ToggleTransactionInput(TransactionType.Repaying_loan);
+        }
+
+        void LoanBorrowButton_OnMouseClick(BaseScreenComponent sender, Vector2 position)
+        {
+            DaggerfallUI.Instance.PlayOneShot(SoundClips.ButtonClick);
+            if (DaggerfallBankManager.HasDefaulted(regionIndex))
             {
-                TextFile.Token[] tokens = null;
-                // Inform player they're too skilled to train
-                if (playerEntity.Skills.GetPermanentSkillValue(skillToTrain) >= MaxPossTrain)
-                {
-                    tokens = DaggerfallUnity.Instance.TextProvider.CreateTokens(
-                        TextFile.Formatting.JustifyCenter,
-                        "It seems the student has become the master, " + facTitle + ". There is nothing",
-                        "more I can teach you. A true master in " + skillName,
-                        "does not bother with theory their whole life. They",
-                        "put those theories to practice and become innovators.",
-                        "Now get out there and become a real master, " + facTitle + "!",
-                        "",
-                        "(Can't Be Trained Further Than " + MaxPossTrain + " In This Skill)");
-                }
-                else
-                {
-                    tokens = DaggerfallUnity.Instance.TextProvider.CreateTokens(
-                        TextFile.Formatting.JustifyCenter,
-                        "Train you, " + facTitle + "? Ha, you could probably",
-                        "teach me a thing or two about " + skillName + "! If you want",
-                        "more training, best find a trainer with more experience.",
-                        "",
-                        "(Max Training Up To " + trainingMaximum.ToString() + " Here)");
-                }
-
-                DaggerfallMessageBox messageBox = new DaggerfallMessageBox(uiManager, uiManager.TopWindow);
-                messageBox.SetTextTokens(tokens, Guild);
-                messageBox.ClickAnywhereToClose = true;
-                messageBox.Show();
+                GeneratePopup(TransactionResult.ALREADY_DEFAULTED);
+                ToggleTransactionInput(TransactionType.None);
+            }
+            else if (DaggerfallBankManager.HasLoan(regionIndex))
+            {
+                GeneratePopup(TransactionResult.ALREADY_HAVE_LOAN);
+                ToggleTransactionInput(TransactionType.None);
             }
             else
-            {   // Train the skill
-                bool reduceHealth = false;
-                bool reduceMagicka = false;
-                DaggerfallDateTime now = DaggerfallUnity.Instance.WorldTime.Now;
-                playerEntity.TimeOfLastSkillTraining = now.ToClassicDaggerfallTime();
-                now.RaiseTime(DaggerfallDateTime.SecondsPerHour * TrainingServiceOverhaulMain.GetHoursPassedTraining()); // 3
-                int trainingPrice = CalculateTrainingPrice(guildhallQuality, player, skillToTrain);
-                int statReduceAmount = CalculateStatSessionReduction(skillToTrain, out reduceHealth, out reduceMagicka);
-                playerEntity.DeductGoldAmount(trainingPrice);
-                if (TrainingServiceOverhaulMain.GetAllowHPMPDamage() && reduceHealth)
-                {
-                    int hpDecreased = HealthDecreaseAmount(player);
-                    playerEntity.DecreaseHealth(hpDecreased);
-                }
-                if (TrainingServiceOverhaulMain.GetAllowHPMPDamage() && reduceMagicka)
-                {
-                    int mpDecreased = MagickaDecreaseAmount(player);
-                    playerEntity.DecreaseMagicka(mpDecreased);
-                }
-                playerEntity.DecreaseFatigue(statReduceAmount * 180); // Maybe eventually refuse training if player is too exhausted
-                int trainingAmount = CalculateTrainingAmount(guildhallQuality, player, skillToTrain);
-                int skillAdvancementMultiplier = DaggerfallSkills.GetAdvancementMultiplier(skillToTrain);
-                short tallyAmount = (short)(trainingAmount * skillAdvancementMultiplier);
-                playerEntity.TallySkill(skillToTrain, tallyAmount);
-                DaggerfallUI.MessageBox(TrainSkillId);
+            {
+                ToggleTransactionInput(TransactionType.Borrowing_loan);
             }
         }
 
-        public int CalculateTrainingMaximum(int Quality)
+        void BuyHouseButton_OnMouseClick(BaseScreenComponent sender, Vector2 position)
         {
-            if (Quality <= 3)       // 01 - 03 "Awful"
-            {
-                return TrainingServiceOverhaulMain.GetMaxTrainAwful(); // 35
-            }
-            else if (Quality <= 7)  // 04 - 07 "Poor"
-            {
-                return TrainingServiceOverhaulMain.GetMaxTrainPoor(); // 50
-            }
-            else if (Quality <= 13) // 08 - 13 "Decent"
-            {
-                return TrainingServiceOverhaulMain.GetMaxTrainDecent(); // 65
-            }
-            else if (Quality <= 17) // 14 - 17 "Good"
-            {
-                return TrainingServiceOverhaulMain.GetMaxTrainGood(); // 75
-            }
-            else                    // 18 - 20 "Great"
-            {
-                return TrainingServiceOverhaulMain.GetMaxTrainGreat(); // 85
-            }
-        }
-
-        public int CalculateTrainingPrice(int Quality, PlayerEntity player, DFCareer.Skills skillToTrain)
-        {
-            int skillValue = playerEntity.Skills.GetPermanentSkillValue(skillToTrain); // Will likely want to change the pricing around later.
-            int goldCost = 1;
-
-            if (Quality <= 3)       // 01 - 03
-            {
-                if (skillValue >= 70)
-                    goldCost = (int)((25 + Quality) * skillValue * 2.0);
-                else
-                    goldCost = (25 + Quality) * skillValue;
-            }
-            else if (Quality <= 7)  // 04 - 07
-            {
-                if (skillValue >= 70)
-                    goldCost = (int)((25 + Quality) * skillValue * 1.90);
-                else
-                    goldCost = (25 + Quality) * skillValue;
-            }
-            else if (Quality <= 13) // 08 - 13
-            {
-                if (skillValue >= 70)
-                    goldCost = (int)((25 + Quality) * skillValue * 1.80);
-                else
-                    goldCost = (25 + Quality) * skillValue;
-            }
-            else if (Quality <= 17) // 14 - 17
-            {
-                if (skillValue >= 70)
-                    goldCost = (int)((25 + Quality) * skillValue * 1.70);
-                else
-                    goldCost = (25 + Quality) * skillValue;
-            }
-            else                    // 18 - 20
-            {
-                if (skillValue >= 70)
-                    goldCost = (int)((25 + Quality) * skillValue * 1.60);
-                else
-                    goldCost = (25 + Quality) * skillValue;
-            }
-
-            if (!Guild.IsMember())
-                goldCost = goldCost * TrainingServiceOverhaulMain.GetNonMembMulti(); // Cost mod for non-members
-            goldCost = FormulaHelper.CalculateTradePrice(goldCost, Quality, false); // Cost modified by merchant skills like in a normal shop transaction (will test with and without to see effect.)
-            goldCost = (int)Mathf.Ceil(goldCost * TrainingServiceOverhaulMain.GetFinalTrainCostMulti()); // Final training cost mod by settings
-            player.TallySkill(DFCareer.Skills.Mercantile, (short)(Mathf.Floor(goldCost / 400) + 1));
-
-            return goldCost;
-        }
-
-        public int CalculateTrainingAmount(int Quality, PlayerEntity player, DFCareer.Skills skillToTrain)
-        {
-            int playerLuck = (int)Mathf.Floor((player.Stats.PermanentLuck - 50) / 5f);
-            int skillValue = playerEntity.Skills.GetPermanentSkillValue(skillToTrain);
-            int trainingAmount = 1;
-
-            if (Quality <= 3)       // 01 - 03
-            {
-                trainingAmount = UnityEngine.Random.Range(13 + Quality + playerLuck, 15 + Quality + playerLuck);
-            }
-            else if (Quality <= 7)  // 04 - 07
-            {
-                trainingAmount = UnityEngine.Random.Range(13 + Quality + playerLuck, 19 + Quality + playerLuck);
-            }
-            else if (Quality <= 13) // 08 - 13
-            {
-                trainingAmount = UnityEngine.Random.Range(13 + Quality + playerLuck, 23 + Quality + playerLuck);
-            }
-            else if (Quality <= 17) // 14 - 17
-            {
-                if (skillValue >= 70)
-                    trainingAmount = UnityEngine.Random.Range(27 + Quality + playerLuck, 36 + Quality + playerLuck);
-                else
-                    trainingAmount = UnityEngine.Random.Range(15 + Quality + playerLuck, 26 + Quality + playerLuck);
-            }
-            else                    // 18 - 20
-            {
-                if (skillValue >= 70)
-                    trainingAmount = UnityEngine.Random.Range(30 + Quality + playerLuck, 45 + Quality + playerLuck);
-                else
-                    trainingAmount = UnityEngine.Random.Range(20 + Quality + playerLuck, 29 + Quality + playerLuck);
-            }
-
-            trainingAmount = (int)Mathf.Floor(trainingAmount * TrainingServiceOverhaulMain.GetFinalTrainedAmountMulti());
-            return trainingAmount;
-        }
-
-        public int CalculateStatSessionReduction(DFCareer.Skills skillToTrain, out bool reduceHealth, out bool reduceMagicka)
-        {
-            int skillId = (int)skillToTrain;
-            reduceHealth = false;
-            reduceMagicka = false;
-
-            switch (skillId)
-            {
-                default:
-                    return 11;
-                case 0:
-                case 1:
-                case 2:
-                case 4:
-                case 5:
-                case 6:
-                case 7:
-                case 8:
-                case 9:
-                case 10:
-                case 11:
-                case 12:
-                case 13:
-                case 14:
-                case 15:
-                case 16:
-                    return 8; // Mostly non-physical academic type activities.
-                case 3:
-                case 17:
-                case 18:
-                case 19:
-                case 21:
-                case 33:
-                case 34:
-                    return 15; // Very physically taxing activities, but not necessarily dangerous.
-                case 20:
-                case 28:
-                case 29:
-                case 30:
-                case 31:
-                case 32:
-                    reduceHealth = true; // Physical and potentially dangerous activities.
-                    return 12;
-                case 22:
-                case 23:
-                case 24:
-                case 25:
-                case 26:
-                case 27:
-                    reduceMagicka = true; // Non-physical magic based activites.
-                    return 9;
-            }
-        }
-
-        public int HealthDecreaseAmount(PlayerEntity player) // Maybe eventually refuse training if player is too hurt
-        {
-            float rolledHpPercent = UnityEngine.Random.Range(0.10f, 0.25f);
-            int hpReduceValue = (int)Mathf.Floor(player.MaxHealth * rolledHpPercent);
-
-            if (player.CurrentHealth > hpReduceValue)
-                return hpReduceValue;
+            DaggerfallUI.Instance.PlayOneShot(SoundClips.ButtonClick);
+            if (DaggerfallBankManager.OwnsHouse)
+                GeneratePopup(TransactionResult.ALREADY_OWN_HOUSE);
             else
-                return 0;
+            {
+                BuildingDirectory buildingDirectory = GameManager.Instance.StreamingWorld.GetCurrentBuildingDirectory();
+                if (buildingDirectory)
+                {
+                    List<BuildingSummary> housesForSale = buildingDirectory.GetHousesForSale();
+                    // If houses are for sale, show them
+                    if (housesForSale.Count > 0)
+                        uiManager.PushWindow(UIWindowFactory.GetInstanceWithArgs(UIWindowType.BankPurchasePopup, new object[] { uiManager, this, housesForSale }));
+                    else
+                        GeneratePopup(TransactionResult.NO_HOUSES_FOR_SALE);
+                }
+                else
+                    GeneratePopup(TransactionResult.NO_HOUSES_FOR_SALE);
+            }
         }
 
-        public int MagickaDecreaseAmount(PlayerEntity player) // Maybe eventually refuse training if player is too low on magic
+        void SellHouseButton_OnMouseClick(BaseScreenComponent sender, Vector2 position)
         {
-            float rolledMpPercent = UnityEngine.Random.Range(0.05f, 0.20f);
-            int mpReduceValue = Mathf.Max((int)Mathf.Floor(player.MaxMagicka * rolledMpPercent), 5);
-
-            if (player.CurrentMagicka > mpReduceValue)
-                return mpReduceValue;
-            else
-                return 0;
+            DaggerfallUI.Instance.PlayOneShot(SoundClips.ButtonClick);
+            if (DaggerfallBankManager.OwnsHouse)
+            {
+                BuildingDirectory buildingDirectory = GameManager.Instance.StreamingWorld.GetCurrentBuildingDirectory();
+                if (buildingDirectory)
+                {
+                    BuildingSummary house;
+                    if (buildingDirectory.GetBuildingSummary(DaggerfallBankManager.OwnedHouseKey, out house))
+                        GeneratePopup(TransactionResult.SELL_HOUSE_OFFER, DaggerfallBankManager.GetHouseSellPrice(house));
+                }
+            }
         }
+
+        void BuyShipButton_OnMouseClick(BaseScreenComponent sender, Vector2 position)
+        {
+            DaggerfallUI.Instance.PlayOneShot(SoundClips.ButtonClick);
+            if (DaggerfallBankManager.OwnsShip)
+                GeneratePopup(TransactionResult.ALREADY_OWN_SHIP);
+            else if (GameManager.Instance.PlayerGPS.CurrentLocation.Exterior.ExteriorData.PortTownAndUnknown == 0)
+                GeneratePopup(TransactionResult.NOT_PORT_TOWN);
+            else    // Show ships for sale
+                uiManager.PushWindow(UIWindowFactory.GetInstanceWithArgs(UIWindowType.BankPurchasePopup, new object[] { uiManager, this, null }));
+        }
+
+        void SellShipButton_OnMouseClick(BaseScreenComponent sender, Vector2 position)
+        {
+            DaggerfallUI.Instance.PlayOneShot(SoundClips.ButtonClick);
+            if (DaggerfallBankManager.OwnsShip)
+                GeneratePopup(TransactionResult.SELL_SHIP_OFFER, DaggerfallBankManager.GetShipSellPrice(DaggerfallBankManager.OwnedShip));
+        }
+
+        void ExitButton_OnMouseClick(BaseScreenComponent sender, Vector2 position)
+        {
+            DaggerfallUI.Instance.PlayOneShot(SoundClips.ButtonClick);
+            if (!transactionInput.Enabled)
+                CloseWindow();
+        }
+
+        public void OnTransactionEventHandler(TransactionType type, TransactionResult result, int amount)
+        {
+            GeneratePopup(result, amount);
+        }
+
+        #endregion
+
+        #region Macro handling
+
+        public MacroDataSource GetMacroDataSource()
+        {
+            return new BankingMacroDataSource(this);
+        }
+
+        /// <summary>
+        /// MacroDataSource context sensitive methods for banking window.
+        /// </summary>
+        private class BankingMacroDataSource : MacroDataSource
+        {
+            private BankingOverhaulWindow parent;
+            public BankingMacroDataSource(BankingOverhaulWindow bankingWindow)
+            {
+                this.parent = bankingWindow;
+            }
+
+            public override string Amount()
+            {
+                return parent.amount.ToString();
+            }
+            public override string MaxLoan()
+            {
+                return FormulaHelper.CalculateMaxBankLoan().ToString();
+            }
+
+        }
+
+        #endregion
+
+        #region banking status box
+
+        public static DaggerfallMessageBox CreateBankingStatusBox(IUserInterfaceWindow previous = null)
+        {
+            DaggerfallMessageBox bankingBox = new DaggerfallMessageBox(DaggerfallUI.Instance.UserInterfaceManager, previous);
+            bankingBox.SetHighlightColor(DaggerfallUI.DaggerfallUnityStatDrainedTextColor);
+            List<TextFile.Token> messages = new List<TextFile.Token>();
+            bool found = false;
+            messages.AddRange(GetLoansLine(
+                TextManager.Instance.GetLocalizedText("region"),
+                TextManager.Instance.GetLocalizedText("account"),
+                TextManager.Instance.GetLocalizedText("loan"),
+                TextManager.Instance.GetLocalizedText("dueDate")));
+            messages.Add(TextFile.NewLineToken);
+            for (int regionIndex = 0; regionIndex < DaggerfallBankManager.BankAccounts.Length; regionIndex++)
+            {
+                if (DaggerfallBankManager.GetAccountTotal(regionIndex) > 0 || DaggerfallBankManager.HasLoan(regionIndex))
+                {
+                    TextFile.Formatting formatting = DaggerfallBankManager.HasDefaulted(regionIndex) ? TextFile.Formatting.TextHighlight : TextFile.Formatting.Text;
+                    messages.AddRange(GetLoansLine(ShortenName(MapsFile.RegionNames[regionIndex], 12), DaggerfallBankManager.GetAccountTotal(regionIndex).ToString(), DaggerfallBankManager.GetLoanedTotal(regionIndex).ToString(), DaggerfallBankManager.GetLoanDueDateString(regionIndex), formatting));
+                    found = true;
+                }
+            }
+            if (!found)
+            {
+                TextFile.Token noneToken = TextFile.CreateTextToken(TextManager.Instance.GetLocalizedText("noAccount"));
+                messages.Add(noneToken);
+                messages.Add(TextFile.NewLineToken);
+            }
+            bankingBox.SetTextTokens(messages.ToArray());
+            bankingBox.ClickAnywhereToClose = true;
+            return bankingBox;
+        }
+
+        private static string ShortenName(string name, int maxLength)
+        {
+            if (name.Length <= maxLength)
+                return name;
+            return name.Substring(0, maxLength - 1) + "...";
+        }
+
+        private static List<TextFile.Token> GetLoansLine(string region, string account, string loan, string duedate, TextFile.Formatting formatting = TextFile.Formatting.Text)
+        {
+            List<TextFile.Token> tokens = new List<TextFile.Token>();
+
+            TextFile.Token positioningToken = TextFile.TabToken;
+
+            tokens.Add(new TextFile.Token(formatting, region));
+            positioningToken.x = 60;
+            tokens.Add(positioningToken);
+            tokens.Add(new TextFile.Token(formatting, account));
+            positioningToken.x = 120;
+            tokens.Add(positioningToken);
+            tokens.Add(new TextFile.Token(formatting, loan));
+            positioningToken.x = 180;
+            tokens.Add(positioningToken);
+            tokens.Add(new TextFile.Token(formatting, duedate));
+            tokens.Add(TextFile.NewLineToken);
+            return tokens;
+        }
+
+        #endregion
     }
 }
