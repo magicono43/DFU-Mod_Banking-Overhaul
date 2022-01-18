@@ -4,12 +4,14 @@
     "ModAuthor": "Kirk.O",
     "ContactInfo": "kirkoliveri@gmail.com",
     "DFUnity_Version": "0.13.4",
-    "ModDescription": "Overhauls How The Training Services Work To Be More Detailed And Interesting",
-    "GUID": "6135629c-08ef-4c57-8385-70b85b71ebf5",
+    "ModDescription": "Overhauls the banking system, making it less exploitable, as well as more detailed and interesting to use.",
+    "GUID": "8e37e278-c44b-4f63-b7db-248aaf77803f",
     "Files": [
-        "Assets/Game/Mods/DFU-Mod_Training-Service-Overhaul/modsettings.json",
-        "Assets/Game/Mods/DFU-Mod_Training-Service-Overhaul/Scripts/TrainingServiceOverhaulMain.cs",
-        "Assets/Game/Mods/DFU-Mod_Training-Service-Overhaul/Scripts/TrainingServiceOverhaulWindow.cs"
+        "Assets/Game/Mods/DFU-Mod_Banking-Overhaul/Scripts/BankingOverhaulWindow.cs",
+        "Assets/Game/Mods/DFU-Mod_Banking-Overhaul/Scripts/BankingOverhaulMain.cs",
+        "Assets/Game/Mods/DFU-Mod_Banking-Overhaul/Scripts/BORegionsWindow.cs",
+        "Assets/Game/Mods/DFU-Mod_Banking-Overhaul/Scripts/BankingOverhaulManager.cs",
+        "Assets/Game/Mods/DFU-Mod_Banking-Overhaul/modsettings.json"
     ],
     "Dependencies": [
         {

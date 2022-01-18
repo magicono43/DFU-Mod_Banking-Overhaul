@@ -5,7 +5,7 @@
 // Created On: 	    12/22/2021, 8:50 PM
 // Last Edit:		12/23/2020, 11:50 PM
 // Version:			1.00
-// Special Thanks:  Lypyl, Hazelnut
+// Special Thanks:  Lypyl, Hazelnut, TheLacus
 // Modifier:
 
 using UnityEngine;
@@ -34,7 +34,7 @@ namespace BankingOverhaul
         private const float housePriceMult = 1280f;
         private const uint loanRepayMinutes = DaggerfallDateTime.DaysPerYear * DaggerfallDateTime.MinutesPerDay;
 
-        private static double locCommission = 1.01;
+        private static double locCommission = 1.02;
 
         private static DaggerfallDateTime dateTime;
 
@@ -245,15 +245,19 @@ namespace BankingOverhaul
         public static TransactionResult Withdraw_LOC(int amount, int regionIndex)
         {
             // Create LOC and deduct from account
-            int amountPlusCommission = (int)(amount * locCommission);
+            int amountPlusCommission = (int)(amount * locCommission); // Possibly omit this comission fee if regional reputation is high enough.
             if (amountPlusCommission > BankAccounts[regionIndex].accountGold)
                 return TransactionResult.NOT_ENOUGH_ACCOUNT_LOC;
             else if (amount < 100)
                 return TransactionResult.LOC_REQUEST_TOO_SMALL;
 
+            DFRegion regionInfo = DaggerfallUnity.Instance.ContentReader.MapFileReader.GetRegion(regionIndex);
+
             BankAccounts[regionIndex].accountGold -= amountPlusCommission;
             DaggerfallUnityItem loc = ItemBuilder.CreateItem(ItemGroups.MiscItems, (int)MiscItems.Letter_of_credit);
             loc.value = amount;
+            loc.message = regionIndex;
+            loc.shortName = regionInfo.Name + " Letter of Credit"; // "Name of region + Letter of Credit" hopefully possible by just changing the shortName.
             GameManager.Instance.PlayerEntity.Items.AddItem(loc, ItemCollection.AddPosition.Front);
             return TransactionResult.NONE;
         }
@@ -267,7 +271,13 @@ namespace BankingOverhaul
                 DaggerfallUnityItem loc = playerItems.GetItem(ItemGroups.MiscItems, (int)MiscItems.Letter_of_credit);
                 if (loc == null)
                     return TransactionResult.NONE;
-                BankAccounts[regionIndex].accountGold += loc.value;
+
+                if (!BankingOverhaulMain.regionRelationValues.ContainsKey(regionIndex) || !BankingOverhaulMain.regionRelationValues.ContainsKey(loc.message))
+                    continue;
+
+                float locValueMod = BankingOverhaulMain.DetermineLoCValueMod(BankingOverhaulMain.CompareRegionValues(BankingOverhaulMain.regionRelationValues[regionIndex], BankingOverhaulMain.regionRelationValues[loc.message], regionIndex, loc.message));
+
+                BankAccounts[regionIndex].accountGold += (int)(loc.value * locValueMod);
                 playerItems.RemoveItem(loc);
             }
         }
@@ -314,7 +324,7 @@ namespace BankingOverhaul
             int legalRep = GameManager.Instance.PlayerEntity.RegionData[regionIndex].LegalRep;
 
             TransactionResult result = TransactionResult.NONE;
-            if (legalRep <= -50 || regionRep <= -50)
+            if (legalRep <= -30 || regionRep <= -50)
                 result = TransactionResult.LOAN_REQUEST_TOO_LOW; // Placeholder for now, will replace with a proper custom text-token later on.
             else if (amount < 100)
                 result = TransactionResult.LOAN_REQUEST_TOO_LOW;
