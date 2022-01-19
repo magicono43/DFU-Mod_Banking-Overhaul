@@ -157,6 +157,19 @@ namespace BankingOverhaul
             return BankAccounts[regionIndex].loanTotal > 0;
         }
 
+        /// <summary>
+        /// Gets amount of gold in specified region
+        /// </summary>
+        /// <param name="regionIndex"></param>
+        /// <returns></returns>
+        public static long GetAccountTotal(int regionIndex)
+        {
+            if (!ValidateRegion(regionIndex))
+                throw new ArgumentOutOfRangeException();
+            else
+                return BankAccounts[regionIndex].accountGold;
+        }
+
         public static void MakeTransactionBO(TransactionType type, int amount, int regionIndex)
         {
             if (regionIndex < 0 || regionIndex >= BankAccounts.Length)

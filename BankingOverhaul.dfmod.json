@@ -11,7 +11,8 @@
         "Assets/Game/Mods/DFU-Mod_Banking-Overhaul/Scripts/BankingOverhaulMain.cs",
         "Assets/Game/Mods/DFU-Mod_Banking-Overhaul/Scripts/BORegionsWindow.cs",
         "Assets/Game/Mods/DFU-Mod_Banking-Overhaul/Scripts/BankingOverhaulManager.cs",
-        "Assets/Game/Mods/DFU-Mod_Banking-Overhaul/modsettings.json"
+        "Assets/Game/Mods/DFU-Mod_Banking-Overhaul/modsettings.json",
+        "Assets/Game/Mods/DFU-Mod_Banking-Overhaul/Textures/Vanilla_Banking_Main-Interface.PNG"
     ],
     "Dependencies": [
         {

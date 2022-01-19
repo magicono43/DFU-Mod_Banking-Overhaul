@@ -18,6 +18,7 @@ using Wenzil.Console;
 using System.Collections.Generic;
 using DaggerfallWorkshop.Game.Utility;
 using DaggerfallWorkshop.Game.Serialization;
+using DaggerfallWorkshop;
 
 namespace BankingOverhaul
 {
@@ -157,6 +158,7 @@ namespace BankingOverhaul
 
             StartGameBehaviour.OnStartGame += GenerateRegionRelationValues_OnStartGame;
             SaveLoadManager.OnLoad += GenerateRegionRelationValues_OnLoad;
+            WorldTime.OnNewMonth += RegenRegionRelationValues_OnNewMonth;
 
             RegisterJACommands();
 
@@ -243,7 +245,7 @@ namespace BankingOverhaul
             return MaximumPossibleTraining;
         }
 
-        void GenerateRegionRelationValues_OnStartGame(object Sender, EventArgs e) // Probably should also do this upon loading a save without any data, so it's retroactive on existing saves.
+        void GenerateRegionRelationValues_OnStartGame(object Sender, EventArgs e)
         {
             for (int m = 0; m < 61; m++)
             {
@@ -265,7 +267,7 @@ namespace BankingOverhaul
             Debug.Log("Banking Overhaul just finished generating region relation values for a new game!");
         }
 
-        void GenerateRegionRelationValues_OnLoad(SaveData_v1 saveData) // Probably should also do this upon loading a save without any data, so it's retroactive on existing saves.
+        void GenerateRegionRelationValues_OnLoad(SaveData_v1 saveData) // Do this upon loading a save without any data, so it's retroactive on existing saves.
         {
             int[] currentRegionValues = regionRelationValues[0];
             if (currentRegionValues[5] == 0)
@@ -291,6 +293,32 @@ namespace BankingOverhaul
             }
             else
                 Debug.Log("Banking Overhaul did not generate new region relation values, as this save already has mod save data.");
+        }
+
+        void RegenRegionRelationValues_OnNewMonth()
+        {
+            if (!(DaggerfallUnity.Instance.WorldTime.Now.Month % 2 == 0)) // Only regen values on even months of the year, so every 2-months.
+            { Debug.Log("New Month is an odd value, so don't regen region relation values."); return; }
+
+            for (int m = 0; m < 61; m++)
+            {
+                if (!regionRelationValues.ContainsKey(m))
+                    continue;
+                int[] currentRegionValues = regionRelationValues[m];
+                for (int i = 0; i < 12; i++)
+                {
+                    if (i == 0 || i == 1) // Keep the "Distance" and "Primary Deity" values static
+                        continue;
+                    else // Randomize the other 10 "opinion" values
+                    {
+                        currentRegionValues[i] += UnityEngine.Random.Range(-3, 4); // Generates number between -3 and 3
+                        currentRegionValues[i] = Mathf.Clamp(currentRegionValues[i], 1, 10); // Prevents value from going below 1 or above 10
+                    }
+                }
+
+                regionRelationValues[m] = currentRegionValues;
+            }
+            Debug.Log("Two Months have passed, Banking Overhaul region relation values have been scrambled slightly!");
         }
 
         public static int CalculateMaxBankLoan()
@@ -424,51 +452,51 @@ namespace BankingOverhaul
         {
             check = false;
 
-            if (regionIndex == 9 | locIndex == 9) { check = true; return 0; } // Isle of Balfiera
+            if (regionIndex == (int)DaggerfallRegions.IsleOfBalfiera | locIndex == (int)DaggerfallRegions.IsleOfBalfiera) { check = true; return 0; } // Isle of Balfiera
 
-            if ((regionIndex == 20 | locIndex == 20) & (regionIndex == 51 | locIndex == 51)) { check = true; return -1; } // Sentinel & Totambu
+            if ((regionIndex == (int)DaggerfallRegions.Sentinel | locIndex == (int)DaggerfallRegions.Sentinel) && (regionIndex == (int)DaggerfallRegions.Totambu | locIndex == (int)DaggerfallRegions.Totambu)) { check = true; return -1; } // Sentinel & Totambu
 
-            if (regionIndex == 26 | locIndex == 26) // Orsinium Area
+            if (regionIndex == (int)DaggerfallRegions.OrsiniumArea | locIndex == (int)DaggerfallRegions.OrsiniumArea) // Orsinium Area
             {
-                if (regionIndex == 16 | locIndex == 16) { check = true; return 1; }
-                if (regionIndex == 17 | locIndex == 17) { check = true; return 1; }
-                if (regionIndex == 35 | locIndex == 35) { check = true; return -2; }
-                if (regionIndex == 38 | locIndex == 38) { check = true; return -2; }
-                if (regionIndex == 57 | locIndex == 57) { check = true; return -2; }
+                if (regionIndex == (int)DaggerfallRegions.WrothgarianMountains | locIndex == (int)DaggerfallRegions.WrothgarianMountains) { check = true; return 1; }
+                if (regionIndex == (int)DaggerfallRegions.Daggerfall | locIndex == (int)DaggerfallRegions.Daggerfall) { check = true; return 1; }
+                if (regionIndex == (int)DaggerfallRegions.Koegria | locIndex == (int)DaggerfallRegions.Koegria) { check = true; return -2; }
+                if (regionIndex == (int)DaggerfallRegions.Phrygias | locIndex == (int)DaggerfallRegions.Phrygias) { check = true; return -2; }
+                if (regionIndex == (int)DaggerfallRegions.Gavaudon | locIndex == (int)DaggerfallRegions.Gavaudon) { check = true; return -2; }
                 if (distance >= 6) { check = true; return 0; }
 
                 check = true; return -1;
             }
 
-            if (regionIndex == 17 | locIndex == 17) // Daggerfall
+            if (regionIndex == (int)DaggerfallRegions.Daggerfall | locIndex == (int)DaggerfallRegions.Daggerfall) // Daggerfall
             {
-                if (regionIndex == 23 | locIndex == 23) { check = true; return -1; } // Wayrest
-                if (regionIndex == 19 | locIndex == 19) { check = true; return 2; }  // Betony
+                if (regionIndex == (int)DaggerfallRegions.Wayrest | locIndex == (int)DaggerfallRegions.Wayrest) { check = true; return -1; } // Wayrest
+                if (regionIndex == (int)DaggerfallRegions.Betony | locIndex == (int)DaggerfallRegions.Betony) { check = true; return 2; }  // Betony
             }
 
-            if (regionIndex == 5 | locIndex == 5) // Dwynnen
+            if (regionIndex == (int)DaggerfallRegions.Dwynnen | locIndex == (int)DaggerfallRegions.Dwynnen) // Dwynnen
             {
-                if (regionIndex == 37 | locIndex == 37) { check = true; return 2; }
-                if (regionIndex == 38 | locIndex == 38) { check = true; return 2; }
-                if (regionIndex == 40 | locIndex == 40) { check = true; return 2; }
+                if (regionIndex == (int)DaggerfallRegions.Kambria | locIndex == (int)DaggerfallRegions.Kambria) { check = true; return 2; }
+                if (regionIndex == (int)DaggerfallRegions.Phrygias | locIndex == (int)DaggerfallRegions.Phrygias) { check = true; return 2; }
+                if (regionIndex == (int)DaggerfallRegions.Ykalon | locIndex == (int)DaggerfallRegions.Ykalon) { check = true; return 2; }
             }
-            if (regionIndex == 37 | locIndex == 37) // Kambria
+            if (regionIndex == (int)DaggerfallRegions.Kambria | locIndex == (int)DaggerfallRegions.Kambria) // Kambria
             {
-                if (regionIndex == 5 | locIndex == 5) { check = true; return 2; }
-                if (regionIndex == 38 | locIndex == 38) { check = true; return 2; }
-                if (regionIndex == 40 | locIndex == 40) { check = true; return 2; }
+                if (regionIndex == (int)DaggerfallRegions.Dwynnen | locIndex == (int)DaggerfallRegions.Dwynnen) { check = true; return 2; }
+                if (regionIndex == (int)DaggerfallRegions.Phrygias | locIndex == (int)DaggerfallRegions.Phrygias) { check = true; return 2; }
+                if (regionIndex == (int)DaggerfallRegions.Ykalon | locIndex == (int)DaggerfallRegions.Ykalon) { check = true; return 2; }
             }
-            if (regionIndex == 38 | locIndex == 38) // Phrygias
+            if (regionIndex == (int)DaggerfallRegions.Phrygias | locIndex == (int)DaggerfallRegions.Phrygias) // Phrygias
             {
-                if (regionIndex == 5 | locIndex == 5) { check = true; return 2; }
-                if (regionIndex == 37 | locIndex == 37) { check = true; return 2; }
-                if (regionIndex == 40 | locIndex == 40) { check = true; return 2; }
+                if (regionIndex == (int)DaggerfallRegions.Dwynnen | locIndex == (int)DaggerfallRegions.Dwynnen) { check = true; return 2; }
+                if (regionIndex == (int)DaggerfallRegions.Kambria | locIndex == (int)DaggerfallRegions.Kambria) { check = true; return 2; }
+                if (regionIndex == (int)DaggerfallRegions.Ykalon | locIndex == (int)DaggerfallRegions.Ykalon) { check = true; return 2; }
             }
-            if (regionIndex == 40 | locIndex == 40) // Ykalon
+            if (regionIndex == (int)DaggerfallRegions.Ykalon | locIndex == (int)DaggerfallRegions.Ykalon) // Ykalon
             {
-                if (regionIndex == 5 | locIndex == 5) { check = true; return 2; }
-                if (regionIndex == 37 | locIndex == 37) { check = true; return 2; }
-                if (regionIndex == 38 | locIndex == 38) { check = true; return 2; }
+                if (regionIndex == (int)DaggerfallRegions.Dwynnen | locIndex == (int)DaggerfallRegions.Dwynnen) { check = true; return 2; }
+                if (regionIndex == (int)DaggerfallRegions.Kambria | locIndex == (int)DaggerfallRegions.Kambria) { check = true; return 2; }
+                if (regionIndex == (int)DaggerfallRegions.Phrygias | locIndex == (int)DaggerfallRegions.Phrygias) { check = true; return 2; }
             }
 
             return 0;

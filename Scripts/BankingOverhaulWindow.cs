@@ -29,7 +29,8 @@ namespace DaggerfallWorkshop.Game.UserInterfaceWindows
         public static int PickedSkillIndex { get; set; }
         public static string PickedSkillName { get; set; }
 
-        const string baseTextureName = "LGS_Invest_Popup_Services_Replacer"; // Will use whatever the name of the new bank background texture will be.
+        //const string baseTextureName = "LGS_Invest_Popup_Services_Replacer"; // Will use whatever the name of the new bank background texture will be.
+        const string baseTextureName = "Vanilla_Banking_Main-Interface"; // Will use whatever the name of the new bank background texture will be.
 
         Panel mainPanel;
 
@@ -255,7 +256,7 @@ namespace DaggerfallWorkshop.Game.UserInterfaceWindows
                 int wagonGold = playerEntity.WagonItems.GetItem(ItemGroups.Currency, (int)Currency.Gold_pieces).stackCount;
                 inventoryAmount.Text += " (+" + wagonGold + ")";
             }
-            accountAmount.Text = DaggerfallBankManager.GetAccountTotal(regionIndex).ToString();
+            accountAmount.Text = BankingOverhaulManager.GetAccountTotal(regionIndex).ToString(); // Have to mess around with these things tomorrow, causing weird behavior between bankmanager classes.
             loanAmountDue.Text = DaggerfallBankManager.GetLoanedTotal(regionIndex).ToString();
             loanDueBy.Text = DaggerfallBankManager.GetLoanDueDateString(regionIndex);
         }
